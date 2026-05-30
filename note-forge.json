@@ -1,0 +1,259 @@
+{
+  "name": "note-forge",
+  "nodes": [
+    {
+      "parameters": {
+        "model": "gemma4-cyber:latest",
+        "options": {
+          "think": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        96,
+        320
+      ],
+      "id": "ee6546a0-0e07-44cb-8226-653b7573adcc",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "MxK45L1SG43mf6UL",
+          "name": "Ollama"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "noteforge",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        80,
+        80
+      ],
+      "id": "4ee58192-f3aa-4ee5-9d23-0471e2d62568",
+      "name": "Webhook",
+      "webhookId": "634dcab3-db60-4fc6-80e7-72f02e11fcaf"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=room name - {{ $json.body.room }}\nroom difficulty - {{ $json.body.difficulty }}\nwhat was leant new -{{ $json.body.what_was_new }} \nthe input dump - {{ $json.body.text}}",
+        "options": {
+          "systemMessage": "You are converting raw session input into a structured wiki reference note for an Obsidian vault.you are not a chatbot\n\nThe person is a junior pentester working through TryHackMe rooms.\nThese notes are personal wiki pages — clean reference material, not journal entries.\n\nYou have two tools. Use them before writing:\n\n## Reconstruct the input first\n- Strip shell prompts, reassemble word-wrapped commands, separate commands from output\n- Fix OCR substitutions (0/O, 1/l/I, rn/m). Flag uncertain content as [?]\n- Screenshots: extract data, don't describe\n- Cut-off content: include what's there, add > ⚠ may be incomplete\n\n## Every note must have\n- Valid YAML frontmatter: title, date, type, platform, difficulty, tags, aliases, related, source\n- Filename comment: <!-- filename: {type}-{room-slug}-{YYYY-MM-DD}.md -->\n- One-liner: what this is in a sentence\n- How it works: mechanism, not steps\n- Commands with annotations (when applicable)\n- Gotchas\n- Key Takeaways: 3-5 bullets, things worth knowing cold\n\n## Rules\n- All commands in fenced code blocks, exact syntax\n- Wikilinks on first mention of every tool and technique: [[nmap]], [[gobuster]]\n- Zero filler\n- Output is the note only. No preamble, no closing remarks.",
+          "enableStreaming": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        288,
+        80
+      ],
+      "id": "ada2a1c0-120d-47f0-abff-39645036ad82",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "query": "=",
+        "webSearchOptions": {
+          "maxResults": 10,
+          "region": "wt-wt",
+          "safeSearch": 0
+        },
+        "cacheSettings": {
+          "enableCache": true,
+          "cacheTTL": 300
+        }
+      },
+      "type": "n8n-nodes-duckduckgo-search.duckDuckGoTool",
+      "typeVersion": 1,
+      "position": [
+        832,
+        336
+      ],
+      "id": "5aa6ca7a-138d-4a41-8ccd-dc80e7001398",
+      "name": "DuckDuckGo"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.body.room }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        272,
+        336
+      ],
+      "id": "d74d942f-dffb-4b6d-9bbc-551574da99b2",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $input.first().json.output;\n\nconst match = content.match(/<!--\\s*filename:\\s*(.+?)\\s*-->/);\nconst filename = match ? match[1].trim() : `note-${Date.now()}.md`;\n\nreturn [{\n  json: { filename },\n  binary: {\n    data: await this.helpers.prepareBinaryData(\n      Buffer.from(content, 'utf8'),\n      filename,\n      'text/markdown'\n    )\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        80
+      ],
+      "id": "7a36847c-2469-4bdf-9f49-f7b19cdbc6c3",
+      "name": "Code in JavaScript to .md"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/home/zagot/notes/thm/{{ $json.filename }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        848,
+        80
+      ],
+      "id": "ff889810-d114-414d-be67-c174a404fe0b",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Fetch Note-Forge templates.\n\nAvailable:\n[active-directory.md, crypto-hash.md, ctf-writeup.md, forensics.md, general-notes.md, malware-re.md, network.md, privesc.md, research-notes.md, tool-usage.md, web-pentest.md]\n\nInput:\n{\n  \"template\": \"template-name.md\"\n}",
+        "url": "https://raw.githubusercontent.com/Zagot-byte/Note-forge/main/templates/${template}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        608,
+        352
+      ],
+      "id": "e27befcb-2f45-4bc6-b43f-c71b883bfe38",
+      "name": "HTTP Request"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "localhost:5678",
+            "user-agent": "curl/8.19.0",
+            "accept": "*/*",
+            "content-type": "application/json",
+            "content-length": "612"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "room": "Basic Pentesting",
+            "difficulty": "Easy",
+            "what_was_new": "nmap, gobuster, ssh brute force",
+            "text": "$ nmap -sC -sV 10.10.10.10\nStarting Nmap scan\nPORT   STATE SERVICE VERSION\n22/tcp open  ssh     OpenSSH 7.2\n80/tcp open  http    Apache 2.4.18\n\n$ gobuster dir -u http://10.10.10.10 -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt\n/admin (Status: 200)\n/secret (Status: 301)\n\n$ hydra -l admin -P /usr/share/wordlists/rockyou.txt ssh://10.10.10.10\n[22][ssh] host: 10.10.10.10 login: admin password: password123\n\nflag{user_flag_here}\nflag{root_flag_here}"
+          },
+          "webhookUrl": "http://localhost:5678/webhook-test/noteforge",
+          "executionMode": "test"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DuckDuckGo": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript to .md",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript to .md": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "569f5e8d-7aa6-45f6-8af7-4d5bbc2b5f1c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0a9f6cc8e89d6ec97c3b166de9b3399c8caf197483d6026a594ba060c10545db"
+  },
+  "id": "Xcm1iBgtF2QJrRgm",
+  "tags": []
+}
